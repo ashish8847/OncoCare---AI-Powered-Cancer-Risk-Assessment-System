@@ -312,7 +312,7 @@ pip install -r requirements.txt
 
 The full academic project report is available in the `docs/` folder:
 
-📄 [`docs/OncoCare_Project_Report.docx`](docs/OncoCare_Project_Report.docx)
+📄 MLminor_project.pdf
 
 The report covers:
 - Chapter 1: Introduction & Problem Identification
