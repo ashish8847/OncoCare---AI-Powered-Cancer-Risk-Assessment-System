@@ -339,15 +339,9 @@ The report covers:
 
 ## 👨‍💻 Author
 
-**[Your Name]**
-- GitHub: [@YOUR_USERNAME](https://github.com/YOUR_USERNAME)
-- Email: your.email@example.com
-
----
-
-## 📜 License
-
-This project is licensed under the **MIT License** — see the [LICENSE](LICENSE) file for details.
+Ashish Sharma
+- GitHub: @ashish8847(https://github.com/ashish8847)
+- Email: sharma.ashish5647@gmail.com
 
 ---
 
