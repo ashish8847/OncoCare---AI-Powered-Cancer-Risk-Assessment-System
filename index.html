@@ -1,0 +1,845 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>OncoCare — AI Cancer Risk Assessment</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<style>
+  /* ── Reset & Tokens ─────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg:       #0a0c10;
+    --surface:  #111318;
+    --card:     #161a22;
+    --border:   #232838;
+    --accent:   #5b7fff;
+    --accent2:  #38d9a9;
+    --danger:   #ff5c5c;
+    --warn:     #ffb347;
+    --text:     #e8eaf0;
+    --muted:    #6b7280;
+    --radius:   14px;
+    --font-head:'Playfair Display', serif;
+    --font-body:'DM Sans', sans-serif;
+  }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: var(--font-body);
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── Background decoration ──────────────────────── */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background:
+      radial-gradient(ellipse 60% 40% at 80% 10%, rgba(91,127,255,.12) 0%, transparent 70%),
+      radial-gradient(ellipse 40% 50% at 10% 80%, rgba(56,217,169,.08) 0%, transparent 70%);
+    pointer-events: none; z-index: 0;
+  }
+
+  /* ── Utility ─────────────────────────────────────── */
+  .hidden  { display: none !important; }
+  .flex    { display: flex; }
+  .col     { flex-direction: column; }
+  .center  { align-items: center; justify-content: center; }
+  .gap-4   { gap: 1rem; }
+  .gap-2   { gap: .5rem; }
+  .mt-1    { margin-top: .25rem; }
+  .mt-2    { margin-top: .5rem; }
+  .mt-4    { margin-top: 1rem; }
+  .w-full  { width: 100%; }
+
+  /* ── Toast ───────────────────────────────────────── */
+  #toast {
+    position: fixed; bottom: 2rem; right: 2rem;
+    background: var(--card); border: 1px solid var(--border);
+    padding: .75rem 1.25rem; border-radius: 10px;
+    font-size: .88rem; z-index: 9999;
+    transform: translateY(100px); opacity: 0;
+    transition: all .35s cubic-bezier(.4,0,.2,1);
+    max-width: 320px;
+  }
+  #toast.show { transform: translateY(0); opacity: 1; }
+  #toast.error { border-color: var(--danger); color: var(--danger); }
+  #toast.success { border-color: var(--accent2); color: var(--accent2); }
+
+  /* ═══════════════════════════════════════════════════
+     AUTH SCREEN
+  ═══════════════════════════════════════════════════ */
+  #auth-screen {
+    position: fixed; inset: 0; z-index: 100;
+    display: flex; align-items: center; justify-content: center;
+    padding: 1rem;
+    background: var(--bg);
+  }
+  .auth-wrap {
+    width: 100%; max-width: 440px;
+    animation: fadeUp .6s ease forwards;
+  }
+  @keyframes fadeUp {
+    from { opacity:0; transform:translateY(30px); }
+    to   { opacity:1; transform:translateY(0); }
+  }
+  .auth-brand {
+    text-align: center; margin-bottom: 2rem;
+  }
+  .auth-brand .logo {
+    width: 54px; height: 54px; border-radius: 14px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 1.6rem; margin-bottom: .75rem;
+  }
+  .auth-brand h1 {
+    font-family: var(--font-head);
+    font-size: 2rem; font-weight: 900;
+    letter-spacing: -.02em;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .auth-brand p { color: var(--muted); font-size: .9rem; margin-top: .25rem; }
+
+  .auth-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 2rem;
+  }
+  .tab-row {
+    display: flex; border-bottom: 1px solid var(--border);
+    margin-bottom: 1.5rem;
+  }
+  .tab-btn {
+    flex: 1; padding: .65rem; background: none; border: none;
+    color: var(--muted); font-family: var(--font-body);
+    font-size: .95rem; cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all .2s;
+  }
+  .tab-btn.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+
+  .form-group { margin-bottom: 1rem; }
+  .form-group label {
+    display: block; font-size: .82rem;
+    color: var(--muted); margin-bottom: .35rem; font-weight: 500;
+  }
+  .form-group input,
+  .form-group select {
+    width: 100%; padding: .7rem 1rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 9px; color: var(--text);
+    font-family: var(--font-body); font-size: .93rem;
+    outline: none; transition: border .2s;
+  }
+  .form-group input:focus,
+  .form-group select:focus { border-color: var(--accent); }
+  .form-group select option { background: var(--surface); }
+
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; }
+
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: .45rem;
+    padding: .75rem 1.5rem; border-radius: 9px;
+    font-family: var(--font-body); font-size: .95rem; font-weight: 500;
+    cursor: pointer; border: none; transition: all .2s; text-decoration: none;
+  }
+  .btn-primary {
+    background: linear-gradient(135deg, var(--accent), #7b61ff);
+    color: #fff; width: 100%;
+    box-shadow: 0 4px 18px rgba(91,127,255,.3);
+  }
+  .btn-primary:hover { filter: brightness(1.1); transform: translateY(-1px); }
+  .btn-primary:active { transform: translateY(0); }
+  .btn-ghost {
+    background: var(--surface); color: var(--text);
+    border: 1px solid var(--border);
+  }
+  .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+  .btn-danger {
+    background: rgba(255,92,92,.15);
+    color: var(--danger); border: 1px solid rgba(255,92,92,.3);
+  }
+
+  /* ═══════════════════════════════════════════════════
+     DASHBOARD
+  ═══════════════════════════════════════════════════ */
+  #dashboard { display: none; min-height: 100vh; position: relative; z-index: 1; }
+
+  /* ─ Navbar ─ */
+  .navbar {
+    position: sticky; top: 0; z-index: 50;
+    background: rgba(10,12,16,.85);
+    backdrop-filter: blur(16px);
+    border-bottom: 1px solid var(--border);
+    padding: 0 2rem;
+    display: flex; align-items: center; justify-content: space-between;
+    height: 64px;
+  }
+  .nav-brand {
+    font-family: var(--font-head); font-size: 1.35rem; font-weight: 700;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .nav-right { display: flex; align-items: center; gap: 1rem; }
+  .nav-user {
+    font-size: .88rem; color: var(--muted);
+    display: flex; align-items: center; gap: .5rem;
+  }
+  .nav-user .avatar {
+    width: 32px; height: 32px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    display: flex; align-items: center; justify-content: center;
+    font-size: .8rem; font-weight: 700; color: #fff;
+  }
+  .logout-btn {
+    padding: .4rem .9rem; font-size: .82rem;
+    background: none; border: 1px solid var(--border);
+    border-radius: 7px; color: var(--muted);
+    cursor: pointer; transition: all .2s;
+  }
+  .logout-btn:hover { border-color: var(--danger); color: var(--danger); }
+
+  /* ─ Tab Nav ─ */
+  .page-tabs {
+    display: flex; gap: 0;
+    border-bottom: 1px solid var(--border);
+    padding: 0 2rem;
+    background: var(--surface);
+  }
+  .page-tab {
+    padding: .9rem 1.5rem; font-size: .9rem;
+    background: none; border: none; color: var(--muted);
+    cursor: pointer; border-bottom: 2px solid transparent;
+    font-family: var(--font-body); transition: all .2s;
+  }
+  .page-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  /* ─ Main content ─ */
+  .main { max-width: 960px; margin: 0 auto; padding: 2rem; }
+
+  /* ─ Section ─ */
+  .section { display: none; }
+  .section.active { display: block; }
+
+  /* ─ Hero ─ */
+  .hero {
+    text-align: center; padding: 2rem 0 1.5rem;
+  }
+  .hero h2 {
+    font-family: var(--font-head);
+    font-size: clamp(1.8rem, 4vw, 2.8rem); font-weight: 900;
+    line-height: 1.15; margin-bottom: .75rem;
+  }
+  .hero p { color: var(--muted); max-width: 520px; margin: 0 auto; font-size: .95rem; }
+  .badge {
+    display: inline-block; padding: .3rem .8rem;
+    border-radius: 99px; font-size: .75rem; font-weight: 600;
+    background: rgba(91,127,255,.12); color: var(--accent);
+    border: 1px solid rgba(91,127,255,.2);
+    margin-bottom: 1rem; letter-spacing: .04em;
+  }
+
+  /* ─ Assessment Card ─ */
+  .assess-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.75rem;
+    margin-top: 1.5rem;
+  }
+  .assess-card h3 {
+    font-size: 1rem; font-weight: 600; margin-bottom: 1.25rem;
+    display: flex; align-items: center; gap: .5rem;
+  }
+  .assess-card h3 span { color: var(--accent); font-size: 1.1rem; }
+
+  /* Symptom grid */
+  .symptom-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: .6rem; margin-bottom: 1.5rem;
+  }
+  .symptom-item {
+    position: relative;
+    display: flex; align-items: center; gap: .6rem;
+    padding: .65rem .9rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 9px; cursor: pointer;
+    transition: all .2s; user-select: none;
+  }
+  .symptom-item:hover { border-color: var(--accent); }
+  .symptom-item.checked {
+    background: rgba(91,127,255,.1);
+    border-color: var(--accent);
+  }
+  .symptom-item input[type=checkbox] { display: none; }
+  .sym-icon {
+    width: 28px; height: 28px; border-radius: 7px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: .95rem; flex-shrink: 0;
+    background: rgba(91,127,255,.12);
+  }
+  .symptom-item.checked .sym-icon { background: rgba(91,127,255,.25); }
+  .sym-label { font-size: .85rem; line-height: 1.3; }
+  .check-dot {
+    position: absolute; top: 6px; right: 8px;
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--accent); display: none;
+  }
+  .symptom-item.checked .check-dot { display: block; }
+
+  /* Action bar */
+  .action-bar {
+    display: flex; gap: .75rem; flex-wrap: wrap;
+    align-items: center;
+  }
+  .btn-assess {
+    background: linear-gradient(135deg, var(--accent), #7b61ff);
+    color: #fff; font-weight: 600;
+    box-shadow: 0 4px 18px rgba(91,127,255,.3);
+    padding: .8rem 2rem; font-size: .95rem;
+  }
+  .btn-assess:hover { filter: brightness(1.1); transform: translateY(-1px); }
+  .btn-sm {
+    padding: .55rem 1.1rem; font-size: .83rem;
+  }
+
+  /* ─ Result Panel ─ */
+  .result-panel {
+    margin-top: 1.5rem;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.75rem;
+    display: none;
+  }
+  .result-panel.show { display: block; }
+  .result-header {
+    display: flex; align-items: center; gap: 1rem;
+    margin-bottom: 1.25rem;
+  }
+  .risk-badge {
+    padding: .4rem 1rem; border-radius: 99px;
+    font-weight: 700; font-size: .9rem; letter-spacing: .03em;
+  }
+  .risk-low    { background: rgba(56,217,169,.15); color: var(--accent2); border: 1px solid rgba(56,217,169,.3); }
+  .risk-moderate { background: rgba(255,179,71,.15); color: var(--warn); border: 1px solid rgba(255,179,71,.3); }
+  .risk-high   { background: rgba(255,92,92,.15); color: var(--danger); border: 1px solid rgba(255,92,92,.3); }
+
+  .prob-bar-wrap {
+    background: var(--surface); border-radius: 99px;
+    height: 10px; overflow: hidden; margin: 1rem 0;
+  }
+  .prob-bar-fill {
+    height: 100%; border-radius: 99px;
+    transition: width .8s cubic-bezier(.4,0,.2,1);
+    background: linear-gradient(90deg, var(--accent2), var(--accent), var(--danger));
+  }
+
+  .result-meta { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; }
+  .result-meta-item {
+    background: var(--surface); border-radius: 9px;
+    padding: .75rem 1rem;
+  }
+  .result-meta-item .label { font-size: .75rem; color: var(--muted); margin-bottom: .2rem; }
+  .result-meta-item .val   { font-size: 1.1rem; font-weight: 600; }
+
+  .disclaimer {
+    margin-top: 1rem; padding: .75rem 1rem;
+    background: rgba(255,179,71,.07);
+    border: 1px solid rgba(255,179,71,.2);
+    border-radius: 9px; font-size: .8rem; color: var(--warn);
+  }
+
+  /* ─ History Section ─ */
+  .history-list { margin-top: 1rem; display: flex; flex-direction: column; gap: .75rem; }
+  .hist-card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 12px; padding: 1.1rem 1.25rem;
+    display: grid; grid-template-columns: auto 1fr auto;
+    gap: 1rem; align-items: center;
+  }
+  .hist-num {
+    width: 36px; height: 36px; border-radius: 50%;
+    background: var(--surface); display: flex;
+    align-items: center; justify-content: center;
+    font-size: .8rem; color: var(--muted);
+  }
+  .hist-info .date { font-size: .78rem; color: var(--muted); }
+  .hist-info .symptoms-count { font-size: .88rem; margin-top: .15rem; }
+  .hist-right { text-align: right; }
+  .hist-right .prob { font-size: 1.1rem; font-weight: 700; }
+
+  .empty-state {
+    text-align: center; padding: 3rem 1rem;
+    color: var(--muted);
+  }
+  .empty-state .icon { font-size: 3rem; margin-bottom: 1rem; opacity: .4; }
+
+  /* ─ Loader ─ */
+  .spinner {
+    width: 20px; height: 20px; border-radius: 50%;
+    border: 2px solid rgba(255,255,255,.2);
+    border-top-color: #fff;
+    animation: spin .7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Responsive ─────────────────────────────────── */
+  @media (max-width: 600px) {
+    .main { padding: 1rem; }
+    .symptom-grid { grid-template-columns: 1fr 1fr; }
+    .result-meta { grid-template-columns: 1fr; }
+    .form-row { grid-template-columns: 1fr; }
+    .navbar { padding: 0 1rem; }
+    .page-tabs { padding: 0 1rem; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ── Toast ─────────────────────────────────────────────── -->
+<div id="toast"></div>
+
+<!-- ════════════════════════════════════════════════════════
+     AUTH SCREEN
+════════════════════════════════════════════════════════ -->
+<div id="auth-screen">
+  <div class="auth-wrap">
+    <div class="auth-brand">
+      <div class="logo">🧬</div>
+      <h1>OncoCare</h1>
+      <p>AI-powered cancer risk assessment</p>
+    </div>
+    <div class="auth-card">
+      <div class="tab-row">
+        <button class="tab-btn active" onclick="switchTab('login')">Sign In</button>
+        <button class="tab-btn" onclick="switchTab('signup')">Create Account</button>
+      </div>
+
+      <!-- Login Form -->
+      <div id="login-form">
+        <div class="form-group">
+          <label>Email Address</label>
+          <input type="email" id="login-email" placeholder="you@email.com"/>
+        </div>
+        <div class="form-group">
+          <label>Password</label>
+          <input type="password" id="login-pass" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()"/>
+        </div>
+        <button class="btn btn-primary mt-4" onclick="doLogin()" id="login-btn">
+          Sign In
+        </button>
+      </div>
+
+      <!-- Signup Form -->
+      <div id="signup-form" class="hidden">
+        <div class="form-row">
+          <div class="form-group">
+            <label>Full Name</label>
+            <input type="text" id="su-name" placeholder="John Doe"/>
+          </div>
+          <div class="form-group">
+            <label>Age</label>
+            <input type="number" id="su-age" placeholder="30" min="1" max="120"/>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Gender</label>
+          <select id="su-gender">
+            <option value="">Prefer not to say</option>
+            <option value="male">Male</option>
+            <option value="female">Female</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Email Address</label>
+          <input type="email" id="su-email" placeholder="you@email.com"/>
+        </div>
+        <div class="form-group">
+          <label>Password <span style="color:var(--muted);font-size:.78rem;">(min 6 chars)</span></label>
+          <input type="password" id="su-pass" placeholder="••••••••" onkeydown="if(event.key==='Enter')doSignup()"/>
+        </div>
+        <button class="btn btn-primary mt-4" onclick="doSignup()" id="signup-btn">
+          Create Account
+        </button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════
+     DASHBOARD
+════════════════════════════════════════════════════════ -->
+<div id="dashboard">
+  <!-- Navbar -->
+  <nav class="navbar">
+    <div class="nav-brand">🧬 OncoCare</div>
+    <div class="nav-right">
+      <div class="nav-user">
+        <div class="avatar" id="nav-avatar">U</div>
+        <span id="nav-name">User</span>
+      </div>
+      <button class="logout-btn" onclick="doLogout()">Logout</button>
+    </div>
+  </nav>
+
+  <!-- Page tabs -->
+  <div class="page-tabs">
+    <button class="page-tab active" onclick="showSection('assess',this)">Assessment</button>
+    <button class="page-tab" onclick="showSection('history',this)">My History</button>
+  </div>
+
+  <!-- Main -->
+  <div class="main">
+
+    <!-- ─ Assessment ─ -->
+    <div class="section active" id="sect-assess">
+      <div class="hero">
+        <div class="badge">AI RISK ASSESSMENT</div>
+        <h2>Symptom-Based<br/>Cancer Risk Analysis</h2>
+        <p>Select all symptoms you are currently experiencing. Our model will assess your cancer risk profile.</p>
+      </div>
+
+      <div class="assess-card">
+        <h3><span>☑</span> Select Your Symptoms</h3>
+        <div class="symptom-grid" id="symptom-grid"></div>
+
+        <div class="action-bar">
+          <button class="btn btn-assess" onclick="doPredict()" id="predict-btn">
+            Analyze Risk
+          </button>
+          <button class="btn btn-ghost btn-sm" onclick="selectAll()">Select All</button>
+          <button class="btn btn-ghost btn-sm" onclick="clearAll()">Clear</button>
+        </div>
+      </div>
+
+      <!-- Result -->
+      <div class="result-panel" id="result-panel">
+        <div class="result-header">
+          <div style="font-size:2rem" id="result-icon">🔍</div>
+          <div>
+            <div id="result-title" style="font-size:1.05rem;font-weight:600;margin-bottom:.3rem;"></div>
+            <span class="risk-badge" id="risk-badge"></span>
+          </div>
+        </div>
+
+        <div class="prob-bar-wrap">
+          <div class="prob-bar-fill" id="prob-fill" style="width:0%"></div>
+        </div>
+
+        <div class="result-meta">
+          <div class="result-meta-item">
+            <div class="label">Cancer Probability</div>
+            <div class="val" id="prob-val">—</div>
+          </div>
+          <div class="result-meta-item">
+            <div class="label">Symptoms Reported</div>
+            <div class="val" id="sym-count-val">—</div>
+          </div>
+        </div>
+
+        <div class="disclaimer">
+          ⚠️ This tool is for <strong>educational purposes only</strong> and is <strong>not a medical diagnosis</strong>. Please consult a qualified healthcare professional.
+        </div>
+      </div>
+    </div><!-- /assess -->
+
+    <!-- ─ History ─ -->
+    <div class="section" id="sect-history">
+      <div class="hero" style="padding-bottom:.5rem;">
+        <h2 style="font-size:1.8rem;">Assessment History</h2>
+        <p>Your past risk assessments are saved below.</p>
+      </div>
+      <div class="history-list" id="history-list">
+        <div class="empty-state"><div class="icon">📋</div><p>Loading history…</p></div>
+      </div>
+    </div>
+
+  </div><!-- /main -->
+</div><!-- /dashboard -->
+
+<script>
+// ─── Symptom definitions ─────────────────────────────────────
+const SYMPTOMS = [
+  { key:'fatigue',              label:'Fatigue',               icon:'😴' },
+  { key:'cough',                label:'Persistent Cough',      icon:'🤧' },
+  { key:'chest_pain',           label:'Chest Pain',            icon:'💔' },
+  { key:'weight_loss',          label:'Unexplained Weight Loss',icon:'⚖️' },
+  { key:'bleeding',             label:'Unusual Bleeding',      icon:'🩸' },
+  { key:'fever',                label:'Fever',                 icon:'🌡️' },
+  { key:'loss_of_appetite',     label:'Loss of Appetite',      icon:'🍽️' },
+  { key:'nausea',               label:'Nausea',                icon:'🤢' },
+  { key:'difficulty_breathing', label:'Breathing Difficulty',  icon:'🫁' },
+  { key:'skin_changes',         label:'Skin Changes',          icon:'🔴' },
+  { key:'swelling',             label:'Swelling / Lumps',      icon:'🔵' },
+  { key:'night_sweats',         label:'Night Sweats',          icon:'💧' },
+  { key:'pain',                 label:'Persistent Pain',       icon:'😣' },
+  { key:'lumps',                label:'Lumps / Masses',        icon:'⚪' },
+  { key:'hoarseness',           label:'Hoarseness',            icon:'🗣️' },
+];
+
+const API = 'http://localhost:5000';
+let currentUser = null;
+
+// ─── Build symptom grid ────────────────────────────────────────
+function buildGrid() {
+  const grid = document.getElementById('symptom-grid');
+  grid.innerHTML = '';
+  SYMPTOMS.forEach(s => {
+    const el = document.createElement('label');
+    el.className = 'symptom-item';
+    el.innerHTML = `
+      <input type="checkbox" id="sym_${s.key}" value="${s.key}"/>
+      <div class="sym-icon">${s.icon}</div>
+      <div class="sym-label">${s.label}</div>
+      <div class="check-dot"></div>`;
+    el.addEventListener('click', () => {
+      const cb = el.querySelector('input');
+      cb.checked = !cb.checked;
+      el.classList.toggle('checked', cb.checked);
+    });
+    grid.appendChild(el);
+  });
+}
+
+function selectAll() {
+  document.querySelectorAll('.symptom-item').forEach(el => {
+    el.querySelector('input').checked = true;
+    el.classList.add('checked');
+  });
+}
+function clearAll() {
+  document.querySelectorAll('.symptom-item').forEach(el => {
+    el.querySelector('input').checked = false;
+    el.classList.remove('checked');
+  });
+  document.getElementById('result-panel').classList.remove('show');
+}
+
+// ─── Toast ────────────────────────────────────────────────────
+function showToast(msg, type='success') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = `show ${type}`;
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => { t.className = ''; }, 3200);
+}
+
+// ─── Tab switching ────────────────────────────────────────────
+function switchTab(tab) {
+  document.getElementById('login-form').classList.toggle('hidden', tab !== 'login');
+  document.getElementById('signup-form').classList.toggle('hidden', tab !== 'signup');
+  document.querySelectorAll('.tab-btn').forEach((b, i) => {
+    b.classList.toggle('active', (i===0 && tab==='login') || (i===1 && tab==='signup'));
+  });
+}
+
+// ─── Page tabs ────────────────────────────────────────────────
+function showSection(id, btn) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.page-tab').forEach(b => b.classList.remove('active'));
+  document.getElementById(`sect-${id}`).classList.add('active');
+  btn.classList.add('active');
+  if (id === 'history') loadHistory();
+}
+
+// ─── Auth ─────────────────────────────────────────────────────
+async function doLogin() {
+  const email = document.getElementById('login-email').value.trim();
+  const pass  = document.getElementById('login-pass').value;
+  if (!email || !pass) { showToast('Please fill all fields', 'error'); return; }
+
+  const btn = document.getElementById('login-btn');
+  btn.innerHTML = '<div class="spinner"></div> Signing in…';
+  btn.disabled = true;
+
+  try {
+    const res = await fetch(`${API}/api/login`, {
+      method:'POST', credentials:'include',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ email, password: pass })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+    currentUser = { id: data.user_id, name: data.name };
+    enterDashboard();
+    showToast(`Welcome back, ${data.name}! 👋`);
+  } catch(e) {
+    showToast(e.message || 'Login failed', 'error');
+  } finally {
+    btn.innerHTML = 'Sign In'; btn.disabled = false;
+  }
+}
+
+async function doSignup() {
+  const name   = document.getElementById('su-name').value.trim();
+  const email  = document.getElementById('su-email').value.trim();
+  const pass   = document.getElementById('su-pass').value;
+  const age    = document.getElementById('su-age').value;
+  const gender = document.getElementById('su-gender').value;
+  if (!name || !email || !pass) { showToast('Please fill required fields', 'error'); return; }
+
+  const btn = document.getElementById('signup-btn');
+  btn.innerHTML = '<div class="spinner"></div> Creating account…';
+  btn.disabled = true;
+
+  try {
+    const res = await fetch(`${API}/api/signup`, {
+      method:'POST', credentials:'include',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ name, email, password:pass, age: age||null, gender })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+    currentUser = { id: data.user_id, name: data.name };
+    enterDashboard();
+    showToast(`Account created! Welcome, ${data.name} 🎉`);
+  } catch(e) {
+    showToast(e.message || 'Signup failed', 'error');
+  } finally {
+    btn.innerHTML = 'Create Account'; btn.disabled = false;
+  }
+}
+
+async function doLogout() {
+  await fetch(`${API}/api/logout`, { method:'POST', credentials:'include' });
+  currentUser = null;
+  document.getElementById('dashboard').style.display = 'none';
+  document.getElementById('auth-screen').style.display = 'flex';
+  clearAll();
+  showToast('Logged out successfully');
+}
+
+function enterDashboard() {
+  document.getElementById('auth-screen').style.display = 'none';
+  document.getElementById('dashboard').style.display = 'block';
+  document.getElementById('nav-name').textContent = currentUser.name;
+  document.getElementById('nav-avatar').textContent = currentUser.name[0].toUpperCase();
+}
+
+// ─── Prediction ───────────────────────────────────────────────
+async function doPredict() {
+  const symptoms = {};
+  SYMPTOMS.forEach(s => {
+    symptoms[s.key] = document.getElementById(`sym_${s.key}`).checked ? 1 : 0;
+  });
+
+  const btn = document.getElementById('predict-btn');
+  btn.innerHTML = '<div class="spinner"></div> Analyzing…';
+  btn.disabled = true;
+
+  try {
+    const res = await fetch(`${API}/api/predict`, {
+      method:'POST', credentials:'include',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ ...symptoms, user_id: currentUser?.id })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+    showResult(data, Object.values(symptoms).reduce((a,b)=>a+b,0));
+  } catch(e) {
+    showToast(e.message || 'Prediction failed', 'error');
+  } finally {
+    btn.innerHTML = 'Analyze Risk'; btn.disabled = false;
+  }
+}
+
+function showResult(data, symCount) {
+  const panel = document.getElementById('result-panel');
+  panel.classList.add('show');
+
+  const prob = (data.probability * 100).toFixed(1);
+  const risk = data.risk_level;
+
+  const icons  = { Low:'✅', Moderate:'⚠️', High:'🚨' };
+  const titles = {
+    Low: 'Low Risk — No significant cancer indicators',
+    Moderate: 'Moderate Risk — Consider consulting a doctor',
+    High: 'High Risk — Please seek medical attention'
+  };
+  const classes = { Low:'risk-low', Moderate:'risk-moderate', High:'risk-high' };
+
+  document.getElementById('result-icon').textContent = icons[risk];
+  document.getElementById('result-title').textContent = titles[risk];
+
+  const badge = document.getElementById('risk-badge');
+  badge.textContent = `${risk} Risk`;
+  badge.className = `risk-badge ${classes[risk]}`;
+
+  setTimeout(() => {
+    document.getElementById('prob-fill').style.width = `${prob}%`;
+  }, 50);
+
+  document.getElementById('prob-val').textContent = `${prob}%`;
+  document.getElementById('sym-count-val').textContent = `${symCount} / ${SYMPTOMS.length}`;
+
+  panel.scrollIntoView({ behavior:'smooth', block:'nearest' });
+}
+
+// ─── History ──────────────────────────────────────────────────
+async function loadHistory() {
+  if (!currentUser) return;
+  const list = document.getElementById('history-list');
+  list.innerHTML = '<div class="empty-state"><div class="icon">⏳</div><p>Loading…</p></div>';
+
+  try {
+    const res = await fetch(`${API}/api/history?user_id=${currentUser.id}`, { credentials:'include' });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+
+    if (!data.length) {
+      list.innerHTML = '<div class="empty-state"><div class="icon">📋</div><p>No assessments yet. Run your first analysis!</p></div>';
+      return;
+    }
+
+    const riskClass = { Low:'risk-low', Moderate:'risk-moderate', High:'risk-high' };
+    list.innerHTML = data.map((r,i) => {
+      const symTotal = SYMPTOMS.reduce((a,s) => a + (r[s.key]||0), 0);
+      const prob = ((r.probability||0)*100).toFixed(1);
+      return `
+        <div class="hist-card">
+          <div class="hist-num">${i+1}</div>
+          <div class="hist-info">
+            <div class="date">🕐 ${r.created_at}</div>
+            <div class="symptoms-count">${symTotal} symptom${symTotal!==1?'s':''} reported</div>
+          </div>
+          <div class="hist-right">
+            <div class="prob">${prob}%</div>
+            <span class="risk-badge ${riskClass[r.risk_level]||''}" style="font-size:.75rem;padding:.25rem .7rem;">${r.risk_level||'—'}</span>
+          </div>
+        </div>`;
+    }).join('');
+  } catch(e) {
+    list.innerHTML = `<div class="empty-state"><div class="icon">⚠️</div><p>${e.message}</p></div>`;
+  }
+}
+
+// ─── Init ─────────────────────────────────────────────────────
+buildGrid();
+
+// Check if already logged in
+(async () => {
+  try {
+    const res = await fetch(`${API}/api/me`, { credentials:'include' });
+    if (res.ok) {
+      const data = await res.json();
+      currentUser = { id: data.user_id, name: data.name };
+      enterDashboard();
+    }
+  } catch(e) {}
+})();
+</script>
+</body>
+</html>
